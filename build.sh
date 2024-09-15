@@ -55,19 +55,7 @@ function run_ise() {
     # Run a Xilinx ISE command
     
     if [[ "${ISE_MODE}" == "docker" ]] ; then
-    
-        if which podman >/dev/null
-        then
-            local RUNNER=podman
-        elif which docker >/dev/null
-        then
-            local RUNNER=docker
-        else
-            echo "neither 'podman' nor 'docker' is available to run the container"
-            exit 1
-        fi
-        
-        ${RUNNER} run \
+        docker run \
             -i \
             --rm \
             --net=none \
