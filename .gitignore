@@ -1,5 +1,6 @@
-*.cf
 vunit_out/
+
+*.cf
 *.bgn
 *.bin
 *.bit

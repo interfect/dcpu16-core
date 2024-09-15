@@ -4,16 +4,17 @@ set -ex
 # Input source files.
 # Note that spaces are not supported because we can't use Bash quoted array expansion later.
 # These must be in dependency order: files can only depend on earlier files.
+# This library will be named "work", so entity instantiation needs to be "work.whatever_thing"
 VHDL_FILES=(main.vhd)
 
-# We can also have a library
+# We can also have a library with a custom name
 VHDL_LIBRARY=dcpu16_lib
 VHDL_LIBRARY_FILES=(src/andgate.vhd)
 
 # Input "user constraints file" defining the pinout you want to use on the FPGA pins.
 UCF_FILE="user.ucf"
 
-# Top-level VHDL component to synthesize
+# Top-level VHDL component to synthesize, from the "work" library
 VHDL_UNIT="main"
 
 # Xilinx FPGA family to make Yosys synthesize for. See <https://yosyshq.readthedocs.io/projects/yosys/en/latest/cmd/synth_xilinx.html>
