@@ -9,7 +9,7 @@ VHDL_FILES=(main.vhd)
 
 # We can also have a library with a custom name
 VHDL_LIBRARY=dcpu16_lib
-VHDL_LIBRARY_FILES=(src/andgate.vhd)
+VHDL_LIBRARY_FILES=(src/*.vhd)
 
 # Input "user constraints file" defining the pinout you want to use on the FPGA pins.
 UCF_FILE="user.ucf"
