@@ -14,11 +14,11 @@ vu.add_vhdl_builtins()
 lib = vu.add_library("dcpu16_lib")
 
 # Add all files ending in .vhd in current working directory to library
-lib.add_source_files("src/*.vhd")
+lib.add_source_files("src/*.vhd", vhdl_standard="2008")
 
 # Also a test library
 test_lib = vu.add_library("dcpu16_test_lib")
-test_lib.add_source_files("src/test/*.vhd")
+test_lib.add_source_files("src/test/*.vhd", vhdl_standard="2008")
 
 # Run vunit function
 vu.main()

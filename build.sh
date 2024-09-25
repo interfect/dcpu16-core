@@ -82,7 +82,7 @@ if [[ "${VHDL_FRONTEND}" == "yosys" ]] ; then
     # If your VHDL uses the pseudostandard Synopsys imports to do math directly on
     # logic-typoe values, like "STD_LOGIC_ARITH", you need -fsynopsys here.
     #GHDL_FLAGS=(-fsynopsys)
-    GHDL_FLAGS=()
+    GHDL_FLAGS=(--std=08)
     # Extra flags to send to synth_xilinx to control its behavior.
     # For example, -noclkbuf will disable insertion of clock buffers, which ISE
     # might complaon about you trying to use in logic later.
@@ -96,7 +96,7 @@ if [[ "${VHDL_FRONTEND}" == "yosys" ]] ; then
           -v "${PROJECT_ROOT}":/workspace \
           -w /workspace \
           hdlc/ghdl:yosys \
-          ghdl "${GHDL_FLAGS[@]}" -a --work="${VHDL_LIBRARY}" "${VHDL_LIBRARY_FILES[@]}"
+          ghdl -a --work="${VHDL_LIBRARY}" "${GHDL_FLAGS[@]}" "${VHDL_LIBRARY_FILES[@]}"
     fi
     
     for VHDL_FILE in "${VHDL_FILES[@]}" ; do
@@ -106,7 +106,7 @@ if [[ "${VHDL_FRONTEND}" == "yosys" ]] ; then
           -v "${PROJECT_ROOT}":/workspace \
           -w /workspace \
           hdlc/ghdl:yosys \
-          ghdl "${GHDL_FLAGS[@]}" -a "${VHDL_FILE}"
+          ghdl -a "${GHDL_FLAGS[@]}" "${VHDL_FILE}"
     done
     
     # Use the GHDL Yosys plugin to synthesize VHDL
@@ -126,7 +126,7 @@ if [[ "${VHDL_FRONTEND}" == "yosys" ]] ; then
       -v "${PROJECT_ROOT}":/workspace \
       -w /workspace \
       hdlc/ghdl:yosys \
-      yosys -m ghdl -p "ghdl ${VHDL_UNIT}; synth_xilinx ${SYNTH_XILINX_FLAGS[@]} -family ${YOSYS_XILINX_FAMILY} -top ${VHDL_UNIT} -ise -flatten; select -set clocks */t:FDRE %x:+FDRE[C] */t:FDRE %d; iopadmap -inpad BUFGP O:I @clocks; iopadmap -outpad OBUF I:O -inpad IBUF O:I @clocks %n; write_edif -pvector bra ${NETLIST_FILE}"
+      yosys -m ghdl -p "ghdl "${GHDL_FLAGS[@]}" ${VHDL_UNIT}; synth_xilinx ${SYNTH_XILINX_FLAGS[@]} -family ${YOSYS_XILINX_FAMILY} -top ${VHDL_UNIT} -ise -flatten; select -set clocks */t:FDRE %x:+FDRE[C] */t:FDRE %d; iopadmap -inpad BUFGP O:I @clocks; iopadmap -outpad OBUF I:O -inpad IBUF O:I @clocks %n; write_edif -pvector bra ${NETLIST_FILE}"
     
 else
     # Use ISE to synthesize the design
