@@ -18,6 +18,10 @@ entity CPU is
 end CPU;
 
 architecture Behavioral of CPU is
+    -- We don't have a like 4 port memory so we need to sequence the reads and writes, so we need a state machine
+    type State is (STATE_READ_INSTRUCTION, STATE_READ_A, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
+    signal sequence_state : State;
+
     -- We model words as logic vectors since sometimes we treat values as signed.
     subtype Word is std_logic_vector(15 downto 0);
     -- Current state of all the generic registers
@@ -52,10 +56,14 @@ architecture Behavioral of CPU is
     signal write_a: std_logic;
     -- This is the loaded operand a, when applicable.
     signal operand_a_in: Word;
+    -- This is what we're going to store to operand a, when applicable
+    signal operand_a_out: Word;
     -- Do we want to read from operand b?
     signal read_b: std_logic;
     -- Do we want to write to operand b?
     signal write_b: std_logic;
+    -- This is the loaded operand b, when applicable.
+    signal operand_b_in: Word;
     -- This is what we're going to store to operand b, when applicable.
     signal operand_b_out: Word;
     
@@ -85,8 +93,9 @@ begin
                 instruction <= (others => '0');
                 registers <= (others => (others => '0'));
                 program_counter <= (others => '0');
-            else
-                -- Normal operation
+                sequence_state <= STATE_READ_INSTRUCTION;
+            -- TODO: Can't match cystom type states with expressions; need to change this to a case instead.
+            elsif state = STATE_READ_INSTRUCTION then
                 -- Load instruction from memory
                 memory_write <= '0';
                 memory_address <= program_counter;
@@ -138,20 +147,56 @@ begin
                     write_a <= '0';
                     read_a <= '0';
                 end if;
-                
-                -- Do the reads
+
+
+                -- Figure out which state to go to depending on what we need to do to do this instruction
+                if read_a = '1' then
+                    state <= STATE_READ_A;
+                elsif read_b = '1' then
+                    state <= STATE_READ_B;
+                else
+                    state <= STATE_THINK;
+                end if;
+
+                -- Increment PC
+                program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
+
+            elsif state = STATE_READ_A then
+                -- Get A; maight need a memory read
+                -- TODO: skip the cycle if it doesn't
                 if read_a = '1' then
                     if instruction_operand_a(5) = '0' then
                         -- Not a literal, so a short operand
                         if instruction_operand_a(4 downto 3) = "00" then
                             -- Top bits of short operand are 0: register value
                             operand_a_in <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
+                        elsif instruction_operand_a(4 downto 3) = "01" then
+                            -- Low top bit is set: register dereference
+                            memory_write <= '0';
+                            memory_address <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
+                            operand_a_in <= memory_data_loaded;
+                        elsif instruction_operand_a(4 downto 3) = "10" then
+                            -- TODO: Implement fetching the next word and use it
+                        elsif instruction_operand_a(4 downto 3) = "11" then
+                            -- TODO: Implement all the unique ones
                         end if;
                     end if;
                 end if;
-                
+
+                if read_b = '1' then
+                    state <= STATE_READ_B;
+                else
+                    state <= STATE_THINK;
+                end if;
+
+            elsif state = STATE_READ_B then
+                -- TODO: Implement
+                state <= STATE_THINK;
+
+            elsif state = STATE_THINK then
+                -- Do the actual operations on operand_a_in, operand_b_in, operand_a_out, operand_b_out
+
                 if instruction_is_basic = '1' then
-                    -- We need to read a, possibly read b, and write to b
                     case instruction_basic_opcode is
                         when OP_SET =>
                             -- Need to take what we loaded from a and store to b
@@ -160,13 +205,31 @@ begin
                             -- TODO: Implement
                             operand_b_out <= (others => '0');
                     end case;
-                    
                 else
                     -- TODO: Special instructions
-                    -- Some read a, some write a
                 end if;
-                
-                -- Do the writes
+
+                if write_a = '1' then
+                    state <= STATE_WRITE_A;
+                elsif write_b = '1' then
+                    state <= STATE_WRITE_B;
+                else
+                    state <= STATE_READ_INSTRUCTION;
+                end if;
+
+            elsif state = STATE_WRITE_A then
+                -- Do the write to A
+
+                -- TODO: Implement
+
+                if write_b = '1' then
+                    state <= STATE_WRITE_B;
+                else
+                    state <= STATE_READ_INSTRUCTION;
+                end if;
+
+            elsif state = STATE_WRITE_B then
+                -- Do the write to B
                 
                 if write_b = '1' then
                     if instruction_operand_b(4 downto 3) = "00" then
@@ -174,9 +237,8 @@ begin
                         registers(to_integer(unsigned(instruction_operand_b(2 downto 0)))) <= operand_b_out;
                     end if;
                 end if;
-                
-                -- Increment PC
-                program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
+
+                state <= STATE_READ_INSTRUCTION;
                 
             end if;
         end if;
