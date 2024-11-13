@@ -19,7 +19,7 @@ end CPU;
 
 architecture Behavioral of CPU is
     -- We don't have a like 4 port memory so we need to sequence the reads and writes, so we need a state machine
-    type State is (STATE_READ_INSTRUCTION, STATE_READ_A, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
+    type State is (STATE_READ_INSTRUCTION, STATE_READ_A_NEXTWORD, STATE_READ_A, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
     -- We can't call this state because the type is called State.
     signal sequence_state : State;
 
@@ -29,8 +29,9 @@ architecture Behavioral of CPU is
     type RegisterSet is array(0 to 7) of Word;
     signal registers: RegisterSet;
     -- Special registers
+    -- Program counter. Also used for "next word" operations
     signal program_counter: Word;
-    
+
     -- Current main instruction word being worked on
     signal instruction: Word;
     -- Decoded parts of the instruction
