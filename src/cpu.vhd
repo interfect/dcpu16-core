@@ -20,6 +20,7 @@ end CPU;
 architecture Behavioral of CPU is
     -- We don't have a like 4 port memory so we need to sequence the reads and writes, so we need a state machine
     type State is (STATE_READ_INSTRUCTION, STATE_READ_A, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
+    -- We can't call this state because the type is called State.
     signal sequence_state : State;
 
     -- We model words as logic vectors since sometimes we treat values as signed.
@@ -94,13 +95,12 @@ begin
                 registers <= (others => (others => '0'));
                 program_counter <= (others => '0');
                 sequence_state <= STATE_READ_INSTRUCTION;
-            -- TODO: Can't match cystom type states with expressions; need to change this to a case instead.
-            elsif state = STATE_READ_INSTRUCTION then
+            elsif sequence_state = STATE_READ_INSTRUCTION then
                 -- Load instruction from memory
                 memory_write <= '0';
                 memory_address <= program_counter;
                 instruction <= memory_data_loaded;
-                
+
                 -- Decode it
                 if instruction(4 downto 0) = "00000" then
                     -- Special instruction
@@ -116,7 +116,7 @@ begin
                     instruction_operand_b <= instruction(9 downto 5);
                     instruction_operand_a <= instruction(15 downto 10);
                 end if;
-                
+
                 -- Decide what directions our operands are going in
                 if instruction_is_basic = '1' then
                     -- Basic instructions always read a and never write it
@@ -129,20 +129,20 @@ begin
                         when others =>
                             read_b <= '1';
                     end case;
-                    
+
                     case instruction_basic_opcode is
                         -- Everything but conditionals needs to write to B.
                         -- We could look at the conditional bit pattern but we actually want to depand on the constants.
                         when OP_IFB | OP_IFC | OP_IFE | OP_IFN | OP_IFG | OP_IFA | OP_IFL | OP_IFU =>
                             write_b <= '0';
                         when others =>
-                            write_b <= '1'; 
+                            write_b <= '1';
                     end case;
                 else
                     -- Special instructions have no operand b at all
                     read_b <= '0';
                     write_b <= '0';
-                    
+
                     -- TODO: Implement
                     write_a <= '0';
                     read_a <= '0';
@@ -151,17 +151,17 @@ begin
 
                 -- Figure out which state to go to depending on what we need to do to do this instruction
                 if read_a = '1' then
-                    state <= STATE_READ_A;
+                    sequence_state <= STATE_READ_A;
                 elsif read_b = '1' then
-                    state <= STATE_READ_B;
+                    sequence_state <= STATE_READ_B;
                 else
-                    state <= STATE_THINK;
+                    sequence_state <= STATE_THINK;
                 end if;
 
                 -- Increment PC
                 program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
 
-            elsif state = STATE_READ_A then
+            elsif sequence_state = STATE_READ_A then
                 -- Get A; maight need a memory read
                 -- TODO: skip the cycle if it doesn't
                 if read_a = '1' then
@@ -184,16 +184,16 @@ begin
                 end if;
 
                 if read_b = '1' then
-                    state <= STATE_READ_B;
+                    sequence_state <= STATE_READ_B;
                 else
-                    state <= STATE_THINK;
+                    sequence_state <= STATE_THINK;
                 end if;
 
-            elsif state = STATE_READ_B then
+            elsif sequence_state = STATE_READ_B then
                 -- TODO: Implement
-                state <= STATE_THINK;
+                sequence_state <= STATE_THINK;
 
-            elsif state = STATE_THINK then
+            elsif sequence_state = STATE_THINK then
                 -- Do the actual operations on operand_a_in, operand_b_in, operand_a_out, operand_b_out
 
                 if instruction_is_basic = '1' then
@@ -210,27 +210,27 @@ begin
                 end if;
 
                 if write_a = '1' then
-                    state <= STATE_WRITE_A;
+                    sequence_state <= STATE_WRITE_A;
                 elsif write_b = '1' then
-                    state <= STATE_WRITE_B;
+                    sequence_state <= STATE_WRITE_B;
                 else
-                    state <= STATE_READ_INSTRUCTION;
+                    sequence_state <= STATE_READ_INSTRUCTION;
                 end if;
 
-            elsif state = STATE_WRITE_A then
+            elsif sequence_state = STATE_WRITE_A then
                 -- Do the write to A
 
                 -- TODO: Implement
 
                 if write_b = '1' then
-                    state <= STATE_WRITE_B;
+                    sequence_state <= STATE_WRITE_B;
                 else
-                    state <= STATE_READ_INSTRUCTION;
+                    sequence_state <= STATE_READ_INSTRUCTION;
                 end if;
 
-            elsif state = STATE_WRITE_B then
+            elsif sequence_state = STATE_WRITE_B then
                 -- Do the write to B
-                
+
                 if write_b = '1' then
                     if instruction_operand_b(4 downto 3) = "00" then
                         -- Top bits of short operand are 0: register value
@@ -238,8 +238,8 @@ begin
                     end if;
                 end if;
 
-                state <= STATE_READ_INSTRUCTION;
-                
+                sequence_state <= STATE_READ_INSTRUCTION;
+
             end if;
         end if;
     end process;
