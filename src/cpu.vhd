@@ -89,7 +89,7 @@ begin
     
     process (clk)
     begin
-        if rising_edge(clk) then
+        if rising_edge(clk) and hold = '0' then
             if rst = '1' then
                 -- Reset the system
                 instruction <= (others => '0');
