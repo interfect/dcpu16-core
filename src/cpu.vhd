@@ -29,8 +29,12 @@ architecture Behavioral of CPU is
     type RegisterSet is array(0 to 7) of Word;
     signal registers: RegisterSet;
     -- Special registers
-    -- Program counter. Also used for "next word" operations
+    -- Program counter (PC). Also used for "next word" operations
     signal program_counter: Word;
+    -- Stack pointer (SP), used for push/pop/jsr/ret
+    signal stack_pointer: Word;
+    -- Extended register (EX)
+    signal extended: Word;
 
     -- Current main instruction word being worked on
     signal instruction: Word;
@@ -93,7 +97,7 @@ architecture Behavioral of CPU is
     constant OP_STD: Opcode := 5x"1f";
 
     -- These are the named operands (long, for a)
-    constant LO_PUSH: LongOperand := 6x"18";
+    constant LO_POP: LongOperand := 6x"18";
     constant LO_PEEK: LongOperand := 6x"19";
     constant LO_PICK: LongOperand := 6x"1a";
     constant LO_SP: LongOperand := 6x"1b";
@@ -130,6 +134,8 @@ begin
             instruction <= (others => '0');
             registers <= (others => (others => '0'));
             program_counter <= (others => '0');
+            stack_pointer <= (others => '0');
+            extended <= (others => '0');
             sequence_state <= STATE_READ_INSTRUCTION;
         elsif rising_edge(clk) and hold = '0' then
             -- Clock is ticking and we are not stopped
@@ -266,8 +272,41 @@ begin
                             memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_a(2 downto 0))))) + unsigned(nextword_a));
                             operand_a_in <= memory_data_loaded;
                         elsif instruction_operand_a(4 downto 3) = SO_CAT_OTHER then
-                            -- TODO: Implement all the unique ones
+                            case instruction_operand_a is
+                                when LO_POP | LO_PEEK =>
+                                    -- Read memory at SP
+                                    memory_write <= '0';
+                                    memory_address <= stack_pointer;
+                                    operand_a_in <= memory_data_loaded;
+                                    if instruction_operand_a = LO_POP then
+                                        -- Increment SP
+                                        stack_pointer <= std_logic_vector(unsigned(stack_pointer) + to_unsigned(1, 16));
+                                    end if;
+                                when LO_PICK =>
+                                    memory_write <= '0';
+                                    memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_a));
+                                    operand_a_in <= memory_data_loaded;
+                                when LO_SP =>
+                                    operand_a_in <= stack_pointer;
+                                when LO_PC =>
+                                    operand_a_in <= program_counter;
+                                when LO_EX =>
+                                    operand_a_in <= extended;
+                                when LO_DEREF =>
+                                    -- Read memory at next word's memory_address
+                                    memory_write <= '0';
+                                    memory_address <= nextword_a;
+                                    operand_a_in <= memory_data_loaded;
+                                when LO_LITERAL =>
+                                    operand_a_in <= nextword_a;
+                                when others =>
+                                    -- TODO: This should never happen
+                                    operand_a_in <= x"bada";
+                            end case;
                         end if;
+                    else
+                        -- Inline literal
+                        operand_a_in <= std_logic_vector(x"ffff" + unsigned(instruction_operand_a(4 downto 0)));
                     end if;
                 end if;
 
