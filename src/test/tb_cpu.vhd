@@ -42,17 +42,20 @@ begin
         -- Loop over all the test cases
         while test_suite loop
             if run("test_load_addr_0") then
+                -- Be in reset
                 dut_memory_data_loaded <= "0000000000000000";
                 dut_hold <= '0';
                 dut_clk <= '0';
                 dut_rst <= '1';
-                wait for 1 ns;
-                dut_clk <= '0';
-                wait for 1 ns;
+                wait for 1 ms;
+                -- Stop being in reset
                 dut_rst <= '0';
+                wait for 1 ms;
+                -- Tick clock
                 dut_clk <= '1';
-                wait for 1 ns;
+                wait for 1 ms;
                 check_equal(dut_memory_write, '0', result("Does not write on reset"));
+                check_equal(dut_memory_address, 0, result("Loads address 0 on reset"));
             end if;
         end loop;
         

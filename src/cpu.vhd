@@ -89,14 +89,15 @@ begin
     
     process (clk)
     begin
-        if rising_edge(clk) and hold = '0' then
-            if rst = '1' then
-                -- Reset the system
-                instruction <= (others => '0');
-                registers <= (others => (others => '0'));
-                program_counter <= (others => '0');
-                sequence_state <= STATE_READ_INSTRUCTION;
-            elsif sequence_state = STATE_READ_INSTRUCTION then
+        if rst = '1' then
+            -- Reset the system regardless of clock
+            instruction <= (others => '0');
+            registers <= (others => (others => '0'));
+            program_counter <= (others => '0');
+            sequence_state <= STATE_READ_INSTRUCTION;
+        elsif rising_edge(clk) and hold = '0' then
+            -- Clock is ticking and we are not stopped
+            if sequence_state = STATE_READ_INSTRUCTION then
                 -- Load instruction from memory
                 memory_write <= '0';
                 memory_address <= program_counter;
