@@ -253,62 +253,63 @@ begin
             elsif sequence_state = STATE_READ_A then
                 -- Get A; might need a memory read
                 -- TODO: skip the cycle if it doesn't
-                if read_a = '1' then
-                    if instruction_operand_a(5) = '0' then
-                        -- Not a literal, so a short operand
-                        if instruction_operand_a(4 downto 3) = SO_CAT_REG_VAL then
-                            -- Top bits of short operand are 0: register value
-                            operand_a_in <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
-                        elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_DEREF then
-                            -- Low top bit is set: register dereference
-                            memory_write <= '0';
-                            memory_address <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
-                            operand_a_in <= memory_data_loaded;
-                        elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
-                            -- Dereference register plus next word
-                            -- Already read next word
-                            memory_write <= '0';
-                            -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
-                            memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_a(2 downto 0))))) + unsigned(nextword_a));
-                            operand_a_in <= memory_data_loaded;
-                        elsif instruction_operand_a(4 downto 3) = SO_CAT_OTHER then
-                            case instruction_operand_a is
-                                when LO_POP | LO_PEEK =>
-                                    -- Read memory at SP
-                                    memory_write <= '0';
-                                    memory_address <= stack_pointer;
-                                    operand_a_in <= memory_data_loaded;
-                                    if instruction_operand_a = LO_POP then
-                                        -- Increment SP
-                                        stack_pointer <= std_logic_vector(unsigned(stack_pointer) + to_unsigned(1, 16));
-                                    end if;
-                                when LO_PICK =>
-                                    memory_write <= '0';
-                                    memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_a));
-                                    operand_a_in <= memory_data_loaded;
-                                when LO_SP =>
-                                    operand_a_in <= stack_pointer;
-                                when LO_PC =>
-                                    operand_a_in <= program_counter;
-                                when LO_EX =>
-                                    operand_a_in <= extended;
-                                when LO_DEREF =>
-                                    -- Read memory at next word's memory_address
-                                    memory_write <= '0';
-                                    memory_address <= nextword_a;
-                                    operand_a_in <= memory_data_loaded;
-                                when LO_LITERAL =>
-                                    operand_a_in <= nextword_a;
-                                when others =>
-                                    -- TODO: This should never happen
-                                    operand_a_in <= x"bada";
-                            end case;
-                        end if;
-                    else
-                        -- Inline literal
-                        operand_a_in <= std_logic_vector(x"ffff" + unsigned(instruction_operand_a(4 downto 0)));
+                -- Assumes read_a is 1
+
+                if instruction_operand_a(5) = '0' then
+                    -- Not a literal, so a short operand
+                    if instruction_operand_a(4 downto 3) = SO_CAT_REG_VAL then
+                        -- Top bits of short operand are 0: register value
+                        operand_a_in <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_DEREF then
+                        -- Low top bit is set: register dereference
+                        memory_write <= '0';
+                        memory_address <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
+                        operand_a_in <= memory_data_loaded;
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
+                        -- Dereference register plus next word
+                        -- Already read next word
+                        memory_write <= '0';
+                        -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
+                        memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_a(2 downto 0))))) + unsigned(nextword_a));
+                        operand_a_in <= memory_data_loaded;
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_OTHER then
+                        case instruction_operand_a is
+                            when LO_POP | LO_PEEK =>
+                                -- Read memory at SP
+                                memory_write <= '0';
+                                memory_address <= stack_pointer;
+                                operand_a_in <= memory_data_loaded;
+                                if instruction_operand_a = LO_POP then
+                                    -- Increment SP
+                                    stack_pointer <= std_logic_vector(unsigned(stack_pointer) + to_unsigned(1, 16));
+                                end if;
+                            when LO_PICK =>
+                                memory_write <= '0';
+                                memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_a));
+                                operand_a_in <= memory_data_loaded;
+                            when LO_SP =>
+                                operand_a_in <= stack_pointer;
+                            when LO_PC =>
+                                operand_a_in <= program_counter;
+                            when LO_EX =>
+                                operand_a_in <= extended;
+                            when LO_DEREF =>
+                                -- Read memory at next word's memory_address
+                                memory_write <= '0';
+                                memory_address <= nextword_a;
+                                operand_a_in <= memory_data_loaded;
+                            when LO_LITERAL =>
+                                operand_a_in <= nextword_a;
+                            when others =>
+                                -- TODO: This should never happen
+                                operand_a_in <= x"bada";
+                        end case;
                     end if;
+                else
+                    -- Inline literal
+                    operand_a_in <= std_logic_vector(x"ffff" + unsigned(instruction_operand_a(4 downto 0)));
                 end if;
+
 
                 if need_nextword_b = '1' then
                     sequence_state <= STATE_READ_B_NEXTWORD;
@@ -336,7 +337,60 @@ begin
                 program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
 
             elsif sequence_state = STATE_READ_B then
-                -- TODO: Implement
+
+                -- TODO: Unify short operand code with a
+                if instruction_operand_b(4 downto 3) = SO_CAT_REG_VAL then
+                    -- Top bits of short operand are 0: register value
+                    operand_b_in <= registers(to_integer(unsigned(instruction_operand_b(2 downto 0))));
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_REG_DEREF then
+                    -- Low top bit is set: register dereference
+                    memory_write <= '0';
+                    memory_address <= registers(to_integer(unsigned(instruction_operand_b(2 downto 0))));
+                    operand_b_in <= memory_data_loaded;
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
+                    -- Dereference register plus next word
+                    -- Already read next word
+                    memory_write <= '0';
+                    -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
+                    memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_b(2 downto 0))))) + unsigned(nextword_b));
+                    operand_b_in <= memory_data_loaded;
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_OTHER then
+                    case instruction_operand_b is
+                        when SO_PUSH =>
+                            -- Read memory before SP
+                            memory_write <= '0';
+                            memory_address <= std_logic_vector(unsigned(stack_pointer) - to_unsigned(1, 16));
+                            operand_b_in <= memory_data_loaded;
+                            -- Decrement SP
+                            stack_pointer <= std_logic_vector(unsigned(stack_pointer) - to_unsigned(1, 16));
+                        when SO_PEEK =>
+                            -- Read memory at SP
+                            memory_write <= '0';
+                            memory_address <= stack_pointer;
+                            operand_b_in <= memory_data_loaded;
+                        when SO_PICK =>
+                            memory_write <= '0';
+                            memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_b));
+                            operand_b_in <= memory_data_loaded;
+                        when SO_SP =>
+                            operand_b_in <= stack_pointer;
+                        when SO_PC =>
+                            operand_b_in <= program_counter;
+                        when SO_EX =>
+                            operand_b_in <= extended;
+                        when SO_DEREF =>
+                            -- Read memory at next word's memory_address
+                            memory_write <= '0';
+                            memory_address <= nextword_b;
+                            operand_b_in <= memory_data_loaded;
+                        when SO_LITERAL =>
+                            operand_b_in <= nextword_b;
+                        when others =>
+                            -- TODO: This should never happen
+                            operand_b_in <= x"badb";
+                    end case;
+                end if;
+
                 sequence_state <= STATE_THINK;
 
             elsif sequence_state = STATE_THINK then
@@ -366,7 +420,59 @@ begin
             elsif sequence_state = STATE_WRITE_A then
                 -- Do the write to A
 
-                -- TODO: Implement
+                if instruction_operand_a(5) = '0' then
+                    -- Not a literal, so a short operand
+                    if instruction_operand_a(4 downto 3) = SO_CAT_REG_VAL then
+                        -- Top bits of short operand are 0: register value
+                        registers(to_integer(unsigned(instruction_operand_a(2 downto 0)))) <= operand_a_out;
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_DEREF then
+                        -- Low top bit is set: register dereference
+                        memory_write <= '1';
+                        memory_address <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
+                        memory_data_stored <= operand_a_out;
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
+                        -- Dereference register plus next word
+                        -- Already read next word
+                        memory_write <= '1';
+                        -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
+                        memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_a(2 downto 0))))) + unsigned(nextword_a));
+                        memory_data_stored <= operand_a_out;
+                    elsif instruction_operand_a(4 downto 3) = SO_CAT_OTHER then
+                        case instruction_operand_a is
+                            when LO_POP | LO_PEEK =>
+                                -- Write memory at SP
+                                memory_write <= '1';
+                                memory_address <= stack_pointer;
+                                memory_data_stored <= operand_a_out;
+                                if instruction_operand_a = LO_POP then
+                                    -- Increment SP
+                                    stack_pointer <= std_logic_vector(unsigned(stack_pointer) + to_unsigned(1, 16));
+                                end if;
+                            when LO_PICK =>
+                                memory_write <= '1';
+                                memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_a));
+                                memory_data_stored <= operand_a_out;
+                            when LO_SP =>
+                                stack_pointer <= operand_a_out;
+                            when LO_PC =>
+                                program_counter <= operand_a_out;
+                            when LO_EX =>
+                                extended <= operand_a_out;
+                            when LO_DEREF =>
+                                -- Read memory at next word's memory_address
+                                memory_write <= '1';
+                                memory_address <= nextword_a;
+                                memory_data_stored <= operand_a_out;
+                            when LO_LITERAL =>
+                                -- "Attempting to write a literal value fails silently"
+                            when others =>
+                                -- TODO: This should never happen
+                        end case;
+                    end if;
+                else
+                    -- Inline literal
+                    -- "Attempting to write a literal value fails silently"
+                end if;
 
                 if write_b = '1' then
                     sequence_state <= STATE_WRITE_B;
@@ -376,16 +482,58 @@ begin
 
             elsif sequence_state = STATE_WRITE_B then
                 -- Do the write to B
-
-                if write_b = '1' then
-                    if instruction_operand_b(4 downto 3) = "00" then
-                        -- Top bits of short operand are 0: register value
-                        registers(to_integer(unsigned(instruction_operand_b(2 downto 0)))) <= operand_b_out;
-                    end if;
+                -- Assumes write_b actually is 1.
+                if instruction_operand_b(4 downto 3) = SO_CAT_REG_VAL then
+                    -- Top bits of short operand are 0: register value
+                    registers(to_integer(unsigned(instruction_operand_b(2 downto 0)))) <= operand_b_out;
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_REG_DEREF then
+                    -- Low top bit is set: register dereference
+                    memory_write <= '1';
+                    memory_address <= registers(to_integer(unsigned(instruction_operand_b(2 downto 0))));
+                    memory_data_stored <= operand_b_out;
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
+                    -- Dereference register plus next word
+                    -- Already read next word
+                    memory_write <= '1';
+                    -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
+                    memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_b(2 downto 0))))) + unsigned(nextword_b));
+                    memory_data_stored <= operand_b_out;
+                elsif instruction_operand_b(4 downto 3) = SO_CAT_OTHER then
+                    case instruction_operand_b is
+                        when SO_PUSH =>
+                            -- Write memory before SP
+                            memory_write <= '1';
+                            memory_address <= std_logic_vector(unsigned(stack_pointer) - to_unsigned(1, 16));
+                            memory_data_stored <= operand_b_out;
+                            -- Decrement SP
+                            stack_pointer <= std_logic_vector(unsigned(stack_pointer) - to_unsigned(1, 16));
+                        when SO_PEEK =>
+                            -- Write memory at SP
+                            memory_write <= '1';
+                            memory_address <= stack_pointer;
+                            memory_data_stored <= operand_b_out;
+                        when SO_PICK =>
+                            memory_write <= '1';
+                            memory_address <= std_logic_vector(unsigned(stack_pointer) + unsigned(nextword_b));
+                            memory_data_stored <= operand_b_out;
+                        when SO_SP =>
+                            stack_pointer <= operand_b_out;
+                        when SO_PC =>
+                            program_counter <= operand_b_out;
+                        when SO_EX =>
+                            extended <= operand_b_out;
+                        when SO_DEREF =>
+                            -- Write memory at next word's memory_address
+                            memory_write <= '1';
+                            memory_address <= nextword_b;
+                            memory_data_stored <= operand_b_out;
+                        when SO_LITERAL =>
+                            -- "Attempting to write a literal value fails silently"
+                        when others =>
+                            -- TODO: This should never happen
+                    end case;
                 end if;
-
                 sequence_state <= STATE_READ_INSTRUCTION;
-
             end if;
         end if;
     end process;
