@@ -19,7 +19,7 @@ end CPU;
 
 architecture Behavioral of CPU is
     -- We don't have a like 4 port memory so we need to sequence the reads and writes, so we need a state machine
-    type State is (STATE_READ_INSTRUCTION, STATE_READ_A_NEXTWORD, STATE_READ_A, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
+    type State is (STATE_READ_INSTRUCTION, STATE_READ_A_NEXTWORD, STATE_READ_A, STATE_READ_B_NEXTWORD, STATE_READ_B, STATE_THINK, STATE_WRITE_A, STATE_WRITE_B);
     -- We can't call this state because the type is called State.
     signal sequence_state : State;
 
@@ -56,6 +56,10 @@ architecture Behavioral of CPU is
     signal read_a: std_logic;
     -- Do we want to write to operand a?
     signal write_a: std_logic;
+    -- Do we need a nextword for operand a?
+    signal need_nextword_a: std_logic;
+    -- And if so, what is it?
+    signal nextword_a: Word;
     -- This is the loaded operand a, when applicable.
     signal operand_a_in: Word;
     -- This is what we're going to store to operand a, when applicable
@@ -64,6 +68,10 @@ architecture Behavioral of CPU is
     signal read_b: std_logic;
     -- Do we want to write to operand b?
     signal write_b: std_logic;
+    -- Do we need a nextword for operand b?
+    signal need_nextword_b: std_logic;
+    -- And if so, what is it?
+    signal nextword_b: Word;
     -- This is the loaded operand b, when applicable.
     signal operand_b_in: Word;
     -- This is what we're going to store to operand b, when applicable.
@@ -83,6 +91,34 @@ architecture Behavioral of CPU is
     
     constant OP_STI: Opcode := 5x"1e";
     constant OP_STD: Opcode := 5x"1f";
+
+    -- These are the named operands (long, for a)
+    constant LO_PUSH: LongOperand := 6x"18";
+    constant LO_PEEK: LongOperand := 6x"19";
+    constant LO_PICK: LongOperand := 6x"1a";
+    constant LO_SP: LongOperand := 6x"1b";
+    constant LO_PC: LongOperand := 6x"1c";
+    constant LO_EX: LongOperand := 6x"1d";
+    constant LO_DEREF: LongOperand := 6x"1e";
+    constant LO_LITERAL: LongOperand := 6x"1f";
+
+    -- These are the named operands (short, for b)
+    constant SO_PUSH: ShortOperand := 5x"18";
+    constant SO_PEEK: ShortOperand := 5x"19";
+    constant SO_PICK: ShortOperand := 5x"1a";
+    constant SO_SP: ShortOperand := 5x"1b";
+    constant SO_PC: ShortOperand := 5x"1c";
+    constant SO_EX: ShortOperand := 5x"1d";
+    constant SO_DEREF: ShortOperand := 5x"1e";
+    constant SO_LITERAL: ShortOperand := 5x"1f";
+
+    -- These are the instruction category bit patterns (bits 4 and 3)
+    constant SO_CAT_REG_VAL: std_logic_vector(1 downto 0) := "00";
+    constant SO_CAT_REG_DEREF: std_logic_vector(1 downto 0) := "01";
+    constant SO_CAT_REG_NEXTWORD_DEREF: std_logic_vector(1 downto 0) := "10";
+    constant SO_CAT_OTHER: std_logic_vector(1 downto 0) := "11";
+
+
     
 begin
 
@@ -134,7 +170,7 @@ begin
 
                     case instruction_basic_opcode is
                         -- Everything but conditionals needs to write to B.
-                        -- We could look at the conditional bit pattern but we actually want to depand on the constants.
+                        -- We could look at the conditional bit pattern but we actually want to depend on the constants.
                         when OP_IFB | OP_IFC | OP_IFE | OP_IFN | OP_IFG | OP_IFA | OP_IFL | OP_IFU =>
                             write_b <= '0';
                         when others =>
@@ -150,10 +186,55 @@ begin
                     read_a <= '0';
                 end if;
 
+                -- Decide if we need to get nextword values for a or b
+                if instruction_operand_a(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF or
+                    instruction_operand_a = LO_PICK or
+                    instruction_operand_a = LO_DEREF or
+                    instruction_operand_a = LO_LITERAL then
+
+                    need_nextword_a <= '1';
+                else
+                    need_nextword_a <= '0';
+                end if;
+                if instruction_operand_b(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF or
+                    instruction_operand_b = SO_PICK or
+                    instruction_operand_b = SO_DEREF or
+                    instruction_operand_b = SO_LITERAL then
+
+                    need_nextword_b <= '1';
+                else
+                    need_nextword_b <= '0';
+                end if;
+
 
                 -- Figure out which state to go to depending on what we need to do to do this instruction
+                if need_nextword_a = '1' then
+                    sequence_state <= STATE_READ_A_NEXTWORD;
+                elsif read_a = '1' then
+                    sequence_state <= STATE_READ_A;
+                elsif need_nextword_b = '1' then
+                    sequence_state <= STATE_READ_B_NEXTWORD;
+                elsif read_b = '1' then
+                    sequence_state <= STATE_READ_B;
+                else
+                    sequence_state <= STATE_THINK;
+                end if;
+
+                -- Increment PC
+                program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
+
+            elsif sequence_state = STATE_READ_A_NEXTWORD then
+
+                -- Read word at PC for use by a
+                memory_write <= '0';
+                memory_address <= program_counter;
+                nextword_a <= memory_data_loaded;
+
+                -- Figure out next state
                 if read_a = '1' then
                     sequence_state <= STATE_READ_A;
+                elsif need_nextword_b = '1' then
+                    sequence_state <= STATE_READ_B_NEXTWORD;
                 elsif read_b = '1' then
                     sequence_state <= STATE_READ_B;
                 else
@@ -164,32 +245,56 @@ begin
                 program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
 
             elsif sequence_state = STATE_READ_A then
-                -- Get A; maight need a memory read
+                -- Get A; might need a memory read
                 -- TODO: skip the cycle if it doesn't
                 if read_a = '1' then
                     if instruction_operand_a(5) = '0' then
                         -- Not a literal, so a short operand
-                        if instruction_operand_a(4 downto 3) = "00" then
+                        if instruction_operand_a(4 downto 3) = SO_CAT_REG_VAL then
                             -- Top bits of short operand are 0: register value
                             operand_a_in <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
-                        elsif instruction_operand_a(4 downto 3) = "01" then
+                        elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_DEREF then
                             -- Low top bit is set: register dereference
                             memory_write <= '0';
                             memory_address <= registers(to_integer(unsigned(instruction_operand_a(2 downto 0))));
                             operand_a_in <= memory_data_loaded;
-                        elsif instruction_operand_a(4 downto 3) = "10" then
-                            -- TODO: Implement fetching the next word and use it
-                        elsif instruction_operand_a(4 downto 3) = "11" then
+                        elsif instruction_operand_a(4 downto 3) = SO_CAT_REG_NEXTWORD_DEREF then
+                            -- Dereference register plus next word
+                            -- Already read next word
+                            memory_write <= '0';
+                            -- Unless we manually convert back to std_logic_vector, we can't resolve unsigned + unsigned.
+                            memory_address <= std_logic_vector(unsigned(registers(to_integer(unsigned(instruction_operand_a(2 downto 0))))) + unsigned(nextword_a));
+                            operand_a_in <= memory_data_loaded;
+                        elsif instruction_operand_a(4 downto 3) = SO_CAT_OTHER then
                             -- TODO: Implement all the unique ones
                         end if;
                     end if;
                 end if;
 
+                if need_nextword_b = '1' then
+                    sequence_state <= STATE_READ_B_NEXTWORD;
+                elsif read_b = '1' then
+                    sequence_state <= STATE_READ_B;
+                else
+                    sequence_state <= STATE_THINK;
+                end if;
+
+            elsif sequence_state = STATE_READ_B_NEXTWORD then
+
+                -- Read word at PC for use by b
+                memory_write <= '0';
+                memory_address <= program_counter;
+                nextword_b <= memory_data_loaded;
+
+                -- Determine next state
                 if read_b = '1' then
                     sequence_state <= STATE_READ_B;
                 else
                     sequence_state <= STATE_THINK;
                 end if;
+
+                -- Increment PC
+                program_counter <= std_logic_vector(unsigned(program_counter) + to_unsigned(1, 16));
 
             elsif sequence_state = STATE_READ_B then
                 -- TODO: Implement
