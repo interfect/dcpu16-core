@@ -88,15 +88,11 @@ architecture Behavioral of CPU is
     signal operand_b_in: Word;
     -- This is what we're going to store to operand b, when applicable.
     signal operand_b_out: Word;
-
-    -- For working out instruction results we need some signals.
-
-    -- Here's a 1-bit-wider result for carries
-    signal computation_result: std_logic_vector(16 downto 0);
     
     -- These are the supported instruction opcodes
     constant OP_SET: Opcode := 5x"01";
     constant OP_ADD: Opcode := 5x"02";
+    constant OP_SUB: Opcode := 5x"03";
     
     constant OP_IFB: Opcode := 5x"10";
     constant OP_IFC: Opcode := 5x"11";
@@ -142,6 +138,8 @@ begin
 
     
     process (clk)
+        -- Here's a 1-bit-wider result for carries
+        variable computation_result: std_logic_vector(16 downto 0);
     begin
         if rst = '1' then
             -- Reset the system regardless of clock
@@ -429,7 +427,21 @@ begin
                             -- Need to take what we loaded from a and store to b
                             operand_b_out <= operand_a_in;
                         when OP_ADD =>
-                            operand_b_out <= std_logic_vector(unsigned(operand_a_in) + unsigned(operand_b_in));
+                            computation_result := std_logic_vector(resize(unsigned(operand_a_in), 17) + resize(unsigned(operand_b_in), 17));
+                            operand_b_out <= computation_result(15 downto 0);
+                            if computation_result(16) = '1' then
+                                extended <= x"0001";
+                            else
+                                extended <= x"0000";
+                            end if;
+                        when OP_SUB =>
+                            computation_result := std_logic_vector(resize(unsigned(operand_a_in), 17) - resize(unsigned(operand_b_in), 17));
+                            operand_b_out <= computation_result(15 downto 0);
+                            if computation_result(16) = '1' then
+                                extended <= x"ffff";
+                            else
+                                extended <= x"0000";
+                            end if;
                             -- TODO: set EX
                         when others =>
                             -- TODO: Implement
