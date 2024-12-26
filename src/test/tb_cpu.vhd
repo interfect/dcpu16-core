@@ -43,7 +43,6 @@ begin
         while test_suite loop
             if run("test_load_addr_0") then
                 -- Be in reset
-                dut_memory_data_loaded <= "0000000000000000";
                 dut_hold <= '0';
                 dut_clk <= '0';
                 dut_rst <= '1';
@@ -52,10 +51,32 @@ begin
                 dut_rst <= '0';
                 wait for 1 ms;
                 -- Tick clock
+                dut_memory_data_loaded <= "0000000000000000";
                 dut_clk <= '1';
                 wait for 1 ms;
                 check_equal(dut_memory_write, '0', result("Does not write on reset"));
                 check_equal(dut_memory_address, 0, result("Loads address 0 on reset"));
+            elsif run("test_add_program") then
+                -- We are doing:
+                -- SET X, 1 (8861)
+                -- SET Y, 2 (8c81)
+                -- ADD X, Y (1062)
+                -- SET [0x1000], X (0fc1 1000)
+
+                -- TODO: Memory process
+
+                -- Be in reset
+                dut_hold <= '0';
+                dut_clk <= '0';
+                dut_rst <= '1';
+                wait for 1 ms;
+                -- Stop being in reset
+                dut_rst <= '0';
+                wait for 1 ms;
+                -- Tick clock
+                dut_memory_data_loaded <= x"8861";
+                dut_clk <= '1';
+                wait for 1 ms;
             end if;
         end loop;
         
